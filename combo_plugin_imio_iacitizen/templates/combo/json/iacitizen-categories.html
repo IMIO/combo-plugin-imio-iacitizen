@@ -1,0 +1,96 @@
+{% load iacitizen_dashboard %}
+{% dashboard_tiles_by_query tile_key connector as user_tiles %}
+<style>
+  .iacitizen-categories .dashboard-switch { padding-right: 10px; }
+  .iacitizen-categories .dashboard-switch input { width: 3em; height: 1.5em; margin: 0; }
+  .iacitizen-categories .iacitizen-categories--all { border-bottom: 1px solid rgba(196, 195, 195, 0.55); }
+  .iacitizen-categories .iacitizen-categories--all h2 { font-weight: bold; }
+</style>
+<div class="iacitizen-categories" data-tile-key="{{ tile_key }}" data-connector="{{ connector }}"
+  data-tiles-url="{% url 'iacitizen-dashboard-tiles' key=tile_key %}">
+  {% if json.data %}
+    <div class="dashboard-settings iacitizen-categories--all">
+      <div class="dashboard-meta">
+        <h2 class="cell--title">Toutes les catégories</h2>
+      </div>
+      <div class="dashboard-switch">
+        <input type="checkbox" id="{{ tile_key }}-id-{{ connector }}-all" class="iacitizen-categories--all-switch">
+      </div>
+    </div>
+  {% endif %}
+  {% for item in json.data|dictsort:"title" %}
+    {% with query=item|category_query:local %}
+      {% with remove_url=user_tiles|get_item:query %}
+        <div class="dashboard-settings">
+          <div class="dashboard-meta">
+            <h2 class="cell--title">{{ item.title }}</h2>
+          </div>
+          <div class="dashboard-switch">
+            <input type="checkbox" id="{{ tile_key }}-id-{{ connector }}{{ query }}" data-query="{{ query }}"
+              class="iacitizen-categories--switch"
+              {% if remove_url %}checked{% endif %}>
+          </div>
+        </div>
+      {% endwith %}
+    {% endwith %}
+  {% endfor %}
+</div>
+<script>
+  $('.iacitizen-categories[data-tile-key="{{ tile_key }}"][data-connector="{{ connector }}"]').each(function() {
+    var $cell = $(this);
+    if ($cell.data('bound')) return;
+    $cell.data('bound', true);
+    var $all = $cell.find('.iacitizen-categories--all-switch');
+    var $switches = $cell.find('.iacitizen-categories--switch');
+    var pending = 0;
+
+    function refreshAll() {
+      $all.prop('checked', $switches.length > 0 && $switches.filter(':checked').length == $switches.length);
+    }
+
+    // prévient si l'utilisateur quitte la page avant la fin d'un enregistrement
+    $(window).on('beforeunload', function(event) {
+      if (pending > 0) {
+        event.preventDefault();
+        return '';
+      }
+    });
+
+    // un seul appel serveur pour toutes les cases, qui basculent tout de suite
+    function save($checkboxes, checked) {
+      var queries = $checkboxes.map(function() { return $(this).data('query'); }).get();
+      if (!queries.length) return $.Deferred().resolve().promise();
+      $checkboxes.prop('checked', checked).prop('disabled', true);
+      pending++;
+      return $.ajax({
+        url: $cell.data('tiles-url'),
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({action: checked ? 'add' : 'remove', connector: $cell.data('connector'), queries: queries})
+      }).done(function() {
+        $('h1#logo').addClass('dashboard-change').on('animationend', function() { $('h1#logo').removeClass('dashboard-change')});
+      }).fail(function() {
+        $checkboxes.prop('checked', !checked);
+      }).always(function() {
+        pending--;
+        $checkboxes.prop('disabled', false);
+        refreshAll();
+      });
+    }
+
+    $switches.on('change', function() {
+      save($(this), $(this).is(':checked'));
+    });
+
+    $all.on('change', function() {
+      var checked = $all.is(':checked');
+      $all.prop('disabled', true);
+      save($switches.filter(checked ? ':not(:checked)' : ':checked'), checked).always(function() {
+        $all.prop('disabled', false);
+        refreshAll();
+      });
+    });
+
+    refreshAll();
+  });
+</script>

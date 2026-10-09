@@ -1,0 +1,6 @@
+recursive-include combo_plugin_imio_iacitizen *.py *.html
+include settings.d/50combo_plugin_imio_iacitizen.py
+include MANIFEST.in
+include README.md
+include CHANGELOG.md
+include LICENSE
